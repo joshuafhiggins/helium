@@ -137,7 +137,6 @@ helium/core/update-credits.patch
 helium/core/disable-user-education-nags.patch
 helium/core/replace-default-profile-name.patch
 helium/core/disable-live-caption-completely.patch
-helium/core/unthemify-onboarding-favicon.patch
 helium/core/spoof-extension-downloader-platform.patch
 helium/core/add-helium-versioning.patch
 helium/core/enable-tab-search-toolbar-button.patch
@@ -161,6 +160,14 @@ helium/core/ublock-reconfigure-defaults.patch
 helium/core/ublock-migrate-prefs.patch
 helium/core/ublock-helium-services.patch
 helium/core/clean-omnibox-suggestions.patch
+helium/core/remove-search-desc-snippet-deps.patch
+helium/core/increase-incognito-storage-quota.patch
+helium/core/mitigate-fingerprinting-canvas.patch
+helium/core/mitigate-fingerprinting-audio-context.patch
+helium/core/reduce-accept-language-headers.patch
+helium/core/disable-ad-topics-and-etc.patch
+helium/core/enable-parallel-downloading.patch
+helium/core/infinite-tab-freezing.patch
 
 helium/settings/move-search-suggest.patch
 helium/settings/remove-autofill.patch
