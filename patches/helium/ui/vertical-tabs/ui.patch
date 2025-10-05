@@ -1,3 +1,20 @@
+--- a/chrome/browser/ui/layout_constants.cc
++++ b/chrome/browser/ui/layout_constants.cc
+@@ -93,11 +93,14 @@ int GetLayoutConstant(LayoutConstant con
+     case TAB_CLOSE_BUTTON_SIZE:
+       return touch_ui ? 24 : 16;
+     case TAB_HEIGHT:
++      if (tabs::AreHeliumVerticalTabsEnabled()) return 28;
+       return 31;
+     case TAB_STRIP_HEIGHT:
++      if (tabs::AreHeliumVerticalTabsEnabled()) return GetLayoutConstant(TAB_HEIGHT) + 3;
+       return GetLayoutConstant(TAB_HEIGHT) +
+              GetLayoutConstant(TAB_STRIP_PADDING);
+     case TAB_STRIP_PADDING:
++      if (tabs::AreHeliumVerticalTabsEnabled()) return 0;
+       return 3;
+     case TAB_SEPARATOR_HEIGHT:
+       return touch_ui ? 24 : 20;
 --- a/chrome/browser/ui/tabs/tab_style.cc
 +++ b/chrome/browser/ui/tabs/tab_style.cc
 @@ -168,8 +168,10 @@ SkColor TabStyle::GetTabBackgroundColor(
@@ -84,7 +101,7 @@
    SetViewVisibility(toolbar_, toolbar_visible);
  
 -  if (tabs::AreVerticalTabsEnabled() && IsVerticalTabsEnabled()) {
-+  if (tabs::AreVerticalTabsEnabled() && IsVerticalTabsEnabled() || tabs::AreHeliumVerticalTabsEnabled()) {
++  if ((tabs::AreVerticalTabsEnabled() && IsVerticalTabsEnabled()) || tabs::AreHeliumVerticalTabsEnabled()) {
      // When vertical tabs is enabled, the top element becomes the toolbar.
      // Because of this, it must now be aware of the location of the caption
      // buttons. We can reuse the calculation use by the TabStripRegionView to
@@ -108,7 +125,7 @@
                                         available_bounds.y());
    int vertical_tab_offset = 0;
 -  if (tabs::AreVerticalTabsEnabled() && IsVerticalTabsEnabled()) {
-+  if (tabs::AreVerticalTabsEnabled() && IsVerticalTabsEnabled() || (delegate_->ShouldDrawTabStrip() && tabs::AreHeliumVerticalTabsEnabled())) {
++  if ((tabs::AreVerticalTabsEnabled() && IsVerticalTabsEnabled()) || (delegate_->ShouldDrawTabStrip() && tabs::AreHeliumVerticalTabsEnabled())) {
      vertical_tab_offset = BrowserView::kVerticalTabStripWidth;
 +    contents_container_bounds.set_x(vertical_tab_offset);
      contents_container_bounds.set_width(available_bounds.width() -
@@ -307,13 +324,14 @@
      }
    }
  
-@@ -231,6 +250,13 @@ gfx::Rect DraggingTabsSession::GetDragge
+@@ -231,6 +250,14 @@ gfx::Rect DraggingTabsSession::GetDragge
      std::vector<gfx::Rect> all_bounds =
          attached_context_->CalculateBoundsForDraggedViews(
              drag_data_.attached_views());
 +
 +    if (tabs::AreHeliumVerticalTabsEnabled()) {
 +      int total_height = all_bounds.back().bottom() - all_bounds.front().y();
++      LOG(INFO) << "width: " << drag_data_.source_view_drag_data()->attached_view->width();
 +      return gfx::Rect(
 +        tab_strip_point.x(), tab_strip_point.y(), drag_data_.source_view_drag_data()->attached_view->width(), total_height);
 +    }
@@ -321,7 +339,7 @@
      int total_width = all_bounds.back().right() - all_bounds.front().x();
      return gfx::Rect(
          tab_strip_point.x(), tab_strip_point.y(), total_width,
-@@ -288,6 +314,72 @@ DraggingTabsSession::CalculateGroupForDr
+@@ -288,6 +315,72 @@ DraggingTabsSession::CalculateGroupForDr
      return std::nullopt;
    }
  
@@ -394,7 +412,7 @@
    std::optional<tab_groups::TabGroupId> left_group =
        adjacent_indices.first.has_value()
            ? attached_model->GetTabGroupForTab(adjacent_indices.first.value())
-@@ -380,6 +472,15 @@ gfx::Point DraggingTabsSession::GetAttac
+@@ -380,6 +473,15 @@ gfx::Point DraggingTabsSession::GetAttac
      gfx::Point point_in_screen) {
    const gfx::Point tab_loc =
        views::View::ConvertPointFromScreen(attached_context_, point_in_screen);
@@ -1288,32 +1306,45 @@
  
 --- a/chrome/browser/ui/views/tabs/tab_strip_layout.cc
 +++ b/chrome/browser/ui/views/tabs/tab_strip_layout.cc
-@@ -10,6 +10,9 @@
+@@ -10,6 +10,10 @@
  #include <optional>
  #include <set>
  
 +#include "chrome/browser/ui/tabs/features.h"
 +#include "chrome/browser/ui/views/frame/browser_view.h"
++#include "chrome/browser/ui/layout_constants.h"
 +#include "chrome/browser/ui/views/tabs/tab_group_underline.h" // for kStrokeThickness
  #include "chrome/browser/ui/tabs/tab_style.h"
  #include "chrome/browser/ui/views/tabs/tab_strip_layout_types.h"
  #include "components/tabs/public/split_tab_id.h"
-@@ -146,6 +149,24 @@ std::pair<std::vector<gfx::Rect>, Layout
+@@ -146,6 +150,36 @@ std::pair<std::vector<gfx::Rect>, Layout
              LayoutDomain::kInactiveWidthEqualsActiveWidth};
    }
  
 +  if (tabs::AreHeliumVerticalTabsEnabled()) {
-+    int next_y = 0;
++    int next_y = 4;
++    std::optional<split_tabs::SplitTabId> part_of_split = std::nullopt;
 +    std::vector<gfx::Rect> bounds;
 +
 +    for (const TabWidthConstraints& tab : tabs) {
 +      if (tab.get_state().IsClosed()) {
 +        bounds.emplace_back(0, next_y, BrowserView::kVerticalTabStripWidth, 0);
 +      } else {
++        int height = GetLayoutConstant(TAB_HEIGHT);
 +        int left_padding = tab.IsPartOfGroup() ? TabGroupUnderline::kStrokeThickness * 7 : 0;
 +        bounds.emplace_back(left_padding, next_y, BrowserView::kVerticalTabStripWidth - left_padding,
-+                            TabStyle::Get()->GetStandardHeight());
-+        next_y += TabStyle::Get()->GetStandardHeight();
++                            height);
++        // Left/top split tab
++        if (tab.get_state().split().has_value() && !part_of_split.has_value()) {
++          part_of_split = tab.get_state().split();
++        // Right/bottom split tab
++        } else if (tab.get_state().split().has_value() && tab.get_state().split() == part_of_split) {
++          part_of_split = std::nullopt;
++          next_y += 4;
++        } else {
++          next_y += 4;
++        }
++        next_y += height;
 +      }
 +    }
 +
@@ -1420,6 +1451,15 @@
  #include "chrome/browser/ui/views/frame/browser_non_client_frame_view.h"
  #include "chrome/browser/ui/views/frame/browser_view.h"
  #include "chrome/browser/ui/views/frame/top_container_background.h"
+@@ -271,7 +272,7 @@ SkPath TabStyleViewsImpl::GetPath(TabSty
+     const bool expand_into_next_separator =
+         limited_tab_space || path_type == TabStyle::PathType::kHitTest ||
+         IsLeftSplitTab(tab());
+-    if (expand_into_previous_separator || expand_into_next_separator) {
++    if (!tabs::AreHeliumVerticalTabsEnabled() && (expand_into_previous_separator || expand_into_next_separator)) {
+       // If there is a tab before this one, then expand into its overlap.
+       const Tab* const previous_tab = GetLeftTab(tab());
+       if (expand_into_previous_separator && previous_tab) {
 @@ -286,12 +287,22 @@ SkPath TabStyleViewsImpl::GetPath(TabSty
      }
  
@@ -1449,6 +1489,19 @@
        }
      }
  
+@@ -345,10 +356,10 @@ SkPath TabStyleViewsImpl::GetPath(TabSty
+   const float stroke_adjustment = stroke_thickness * scale;
+   if (path_type == TabStyle::PathType::kFill ||
+       path_type == TabStyle::PathType::kBorder) {
+-    if (!IsRightSplitTab(tab())) {
++    if (!IsRightSplitTab(tab()) && !tabs::AreHeliumVerticalTabsEnabled()) {
+       tab_left += 0.5f * stroke_adjustment;
+     }
+-    if (!IsLeftSplitTab(tab())) {
++    if (!IsLeftSplitTab(tab()) && !tabs::AreHeliumVerticalTabsEnabled()) {
+       tab_right -= 0.5f * stroke_adjustment;
+     }
+     tab_top += 0.5f * stroke_adjustment;
 @@ -1028,6 +1039,8 @@ void TabStyleViewsImpl::PaintBackgroundS
  }
  
