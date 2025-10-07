@@ -1,6 +1,6 @@
 --- a/chrome/browser/ui/BUILD.gn
 +++ b/chrome/browser/ui/BUILD.gn
-@@ -4439,8 +4439,8 @@ static_library("ui") {
+@@ -4279,8 +4279,8 @@ static_library("ui") {
        "views/tabs/browser_tab_strip_controller.h",
        "views/tabs/color_picker_view.cc",
        "views/tabs/color_picker_view.h",
@@ -22,7 +22,7 @@
  #include "chrome/browser/ui/views/tabs/dragging/tab_drag_controller.h"
  #include "chrome/browser/ui/views/tabs/tab.h"
  #include "chrome/browser/ui/views/tabs/tab_container_impl.h"
-@@ -136,10 +136,13 @@ std::unique_ptr<TabContainer> MakeTabCon
+@@ -135,10 +135,13 @@ std::unique_ptr<TabContainer> MakeTabCon
      TabStrip* tab_strip,
      TabHoverCardController* hover_card_controller,
      TabDragContext* drag_context) {
