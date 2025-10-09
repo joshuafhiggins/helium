@@ -152,7 +152,29 @@
    }
 --- a/chrome/browser/ui/views/frame/tab_strip_region_view.cc
 +++ b/chrome/browser/ui/views/frame/tab_strip_region_view.cc
-@@ -211,6 +211,7 @@ TabStripRegionView::TabStripRegionView(s
+@@ -196,8 +196,20 @@ TabStripRegionView::TabStripRegionView(s
+       this, views::kCascadingBackgroundColor,
+       kColorTabBackgroundInactiveFrameInactive);
+ 
++  if (tabs::AreHeliumVerticalTabsEnabled()) {
++    BrowserView* browser_view =
++        BrowserView::GetBrowserViewForBrowser(tab_strip->controller()->GetBrowser());
++    if (browser_view) {
++      SetBackground(views::CreateSolidBackground(
++          browser_view->frame()->GetFrameView()->GetFrameColor(
++              BrowserFrameActiveState::kUseCurrent)));
++    }
++  }
++
+   SetLayoutManager(std::make_unique<views::FlexLayout>())
+-      ->SetOrientation(views::LayoutOrientation::kHorizontal);
++      ->SetOrientation(tabs::AreHeliumVerticalTabsEnabled() ?
++                          views::LayoutOrientation::kVertical :
++                          views::LayoutOrientation::kHorizontal);
+ 
+   GetViewAccessibility().SetRole(ax::mojom::Role::kTabList);
+   GetViewAccessibility().SetIsMultiselectable(true);
+@@ -211,6 +223,7 @@ TabStripRegionView::TabStripRegionView(s
    std::unique_ptr<TabStripActionContainer> tab_strip_action_container;
    std::unique_ptr<ProductSpecificationsButton> product_specifications_button;
    if (browser &&
@@ -160,28 +182,68 @@
        !base::CommandLine::ForCurrentProcess()->HasSwitch("remove-tabsearch-button") &&
        (browser->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL)) {
      if (features::HasTabSearchToolbarButton()) {
-@@ -263,7 +264,8 @@ TabStripRegionView::TabStripRegionView(s
+@@ -263,7 +276,38 @@ TabStripRegionView::TabStripRegionView(s
      }
    }
  
 -  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip)) {
++  // New tab button for vertical tabs (before the tab strip).
++  if (ShouldShowNewTabButton(browser) && tabs::AreHeliumVerticalTabsEnabled()) {
++    std::unique_ptr<TabStripControlButton> tab_strip_control_button =
++        std::make_unique<TabStripControlButton>(
++            tab_strip_->controller(),
++            base::BindRepeating(&TabStrip::NewTabButtonPressed,
++                                base::Unretained(tab_strip_)),
++            vector_icons::kAddIcon,
++            l10n_util::GetStringUTF16(IDS_TOOLTIP_NEW_TAB),
++            Edge::kNone);
++    tab_strip_control_button->SetProperty(views::kElementIdentifierKey,
++                                          kNewTabButtonElementId);
++
++    tab_strip_control_button->SetPaintToLayer();
++    tab_strip_control_button->layer()->SetFillsBoundsOpaquely(false);
++    tab_strip_control_button->layer()->SetOpacity(0.8f);
++
++    new_tab_button_ = AddChildView(std::move(tab_strip_control_button));
++
++    new_tab_button_->SetTooltipText(
++        l10n_util::GetStringUTF16(IDS_TOOLTIP_NEW_TAB));
++    new_tab_button_->GetViewAccessibility().SetName(
++        l10n_util::GetStringUTF16(IDS_ACCNAME_NEWTAB));
++
++    // The New Tab Button can be middle-clicked on Linux.
++    new_tab_button_->SetTriggerableEventFlags(
++        new_tab_button_->GetTriggerableEventFlags() |
++        ui::EF_MIDDLE_MOUSE_BUTTON);
++  }
++
 +  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip) ||
 +      tabs::AreHeliumVerticalTabsEnabled()) {
      std::unique_ptr<TabStripScrollContainer> scroll_container =
          std::make_unique<TabStripScrollContainer>(std::move(tab_strip));
      tab_strip_scroll_container_ = scroll_container.get();
-@@ -271,7 +273,9 @@ TabStripRegionView::TabStripRegionView(s
-     // Allow the |tab_strip_container_| to grow into the free space available in
+@@ -272,11 +316,16 @@ TabStripRegionView::TabStripRegionView(s
      // the TabStripRegionView.
      const views::FlexSpecification tab_strip_container_flex_spec =
--        views::FlexSpecification(views::LayoutOrientation::kHorizontal,
-+        views::FlexSpecification(tabs::AreHeliumVerticalTabsEnabled() ?
-+                                  views::LayoutOrientation::kVertical :
-+                                  views::LayoutOrientation::kHorizontal,
-                                  views::MinimumFlexSizeRule::kScaleToMinimum,
-                                  views::MaximumFlexSizeRule::kPreferred);
+         views::FlexSpecification(views::LayoutOrientation::kHorizontal,
+-                                 views::MinimumFlexSizeRule::kScaleToMinimum,
+-                                 views::MaximumFlexSizeRule::kPreferred);
++                                  views::MinimumFlexSizeRule::kScaleToMinimum,
++                                  views::MaximumFlexSizeRule::kPreferred);
++    const views::FlexSpecification tab_strip_container_flex_spec_vertical =
++        views::FlexSpecification(views::LayoutOrientation::kVertical,
++                                 views::MinimumFlexSizeRule::kScaleToZero,
++                                 views::MaximumFlexSizeRule::kUnbounded);
      tab_strip_container_->SetProperty(views::kFlexBehaviorKey,
-@@ -290,7 +294,7 @@ TabStripRegionView::TabStripRegionView(s
+-                                      tab_strip_container_flex_spec);
+-
++                                      tabs::AreHeliumVerticalTabsEnabled() ?
++                                        tab_strip_container_flex_spec_vertical :
++                                        tab_strip_container_flex_spec);
+   } else {
+     tab_strip_container_ = AddChildView(std::move(tab_strip));
+ 
+@@ -290,7 +339,7 @@ TabStripRegionView::TabStripRegionView(s
                                        tab_strip_container_flex_spec);
    }
  
@@ -190,7 +252,7 @@
      std::unique_ptr<TabStripControlButton> tab_strip_control_button =
          std::make_unique<TabStripControlButton>(
              tab_strip_->controller(),
-@@ -313,17 +317,20 @@ TabStripRegionView::TabStripRegionView(s
+@@ -313,17 +362,20 @@ TabStripRegionView::TabStripRegionView(s
            ui::EF_MIDDLE_MOUSE_BUTTON);
    }
  
@@ -219,7 +281,7 @@
      if (product_specifications_button) {
        product_specifications_button_ =
            AddChildView(std::move(product_specifications_button));
-@@ -337,6 +344,7 @@ TabStripRegionView::TabStripRegionView(s
+@@ -337,6 +389,7 @@ TabStripRegionView::TabStripRegionView(s
      tab_strip_action_container_ =
          AddChildView(std::move(tab_strip_action_container));
    }
@@ -227,7 +289,7 @@
    UpdateTabStripMargin();
  }
  TabStripRegionView::~TabStripRegionView() {
-@@ -396,7 +404,8 @@ bool TabStripRegionView::IsRectInWindowC
+@@ -396,7 +449,8 @@ bool TabStripRegionView::IsRectInWindowC
    // true.
    if (tab_strip_container_->HitTestRect(
            get_target_rect(tab_strip_container_))) {
@@ -237,7 +299,7 @@
        TabStripScrollContainer* scroll_container =
            views::AsViewClass<TabStripScrollContainer>(tab_strip_container_);
  
-@@ -464,7 +473,8 @@ views::View::Views TabStripRegionView::G
+@@ -464,7 +518,8 @@ views::View::Views TabStripRegionView::G
  // manually calculated.
  void TabStripRegionView::Layout(PassKey) {
    const bool tab_search_container_before_tab_strip =
@@ -247,7 +309,16 @@
    if (tab_search_container_before_tab_strip) {
      UpdateTabStripMargin();
    }
-@@ -654,6 +664,11 @@ void TabStripRegionView::UpdateButtonBor
+@@ -489,7 +544,7 @@ void TabStripRegionView::Layout(PassKey)
+ 
+   views::View* button_to_paint_to_layer = new_tab_button_;
+ 
+-  if (button_to_paint_to_layer) {
++  if (button_to_paint_to_layer && !tabs::AreHeliumVerticalTabsEnabled()) {
+     // The button needs to be layered on top of the tabstrip to achieve
+     // negative margins.
+     gfx::Size button_size = button_to_paint_to_layer->GetPreferredSize();
+@@ -654,6 +709,11 @@ void TabStripRegionView::UpdateButtonBor
  }
  
  void TabStripRegionView::UpdateTabStripMargin() {
@@ -1399,11 +1470,11 @@
    }
  
 +  if (tabs::AreHeliumVerticalTabsEnabled()) {
-+    int next_y = 0;
 +    std::optional<split_tabs::SplitTabId> part_of_split = std::nullopt;
 +    std::vector<gfx::Rect> bounds;
 +
 +    int margin = GetLayoutConstant(TOP_BAR_VERTICAL_PADDING);
++    int next_y = margin;
 +
 +    for (const TabWidthConstraints& tab : tabs) {
 +      if (tab.get_state().IsClosed()) {
@@ -1530,16 +1601,29 @@
  #include "chrome/browser/ui/views/frame/browser_non_client_frame_view.h"
  #include "chrome/browser/ui/views/frame/browser_view.h"
  #include "chrome/browser/ui/views/frame/top_container_background.h"
-@@ -271,7 +272,7 @@ SkPath TabStyleViewsImpl::GetPath(TabSty
+@@ -215,7 +216,10 @@ SkPath TabStyleViewsImpl::GetPath(TabSty
+   // tab width (in DIP), not our new, scaled-and-aligned bounds.
+   float content_corner_radius =
+       GetTopCornerRadiusForWidth(tab()->width()) * scale;
+-  float extension_corner_radius = tab_style()->GetBottomCornerRadius() * scale;
++
++  float extension_corner_radius = tabs::AreHeliumVerticalTabsEnabled() ?
++                                    6 * scale :
++                                    tab_style()->GetBottomCornerRadius() * scale;
+ 
+   const float separator_overlap = (tab_style()->GetSeparatorMargins().width() +
+                                    tab_style()->GetSeparatorSize().width()) *
+@@ -271,7 +275,8 @@ SkPath TabStyleViewsImpl::GetPath(TabSty
      const bool expand_into_next_separator =
          limited_tab_space || path_type == TabStyle::PathType::kHitTest ||
          IsLeftSplitTab(tab());
 -    if (expand_into_previous_separator || expand_into_next_separator) {
-+    if (!tabs::AreHeliumVerticalTabsEnabled() && (expand_into_previous_separator || expand_into_next_separator)) {
++    if (!tabs::AreHeliumVerticalTabsEnabled() &&
++        (expand_into_previous_separator || expand_into_next_separator)) {
        // If there is a tab before this one, then expand into its overlap.
        const Tab* const previous_tab = GetLeftTab(tab());
        if (expand_into_previous_separator && previous_tab) {
-@@ -286,12 +287,22 @@ SkPath TabStyleViewsImpl::GetPath(TabSty
+@@ -286,12 +291,22 @@ SkPath TabStyleViewsImpl::GetPath(TabSty
      }
  
      if (tab()->split().has_value()) {
@@ -1568,7 +1652,20 @@
        }
      }
  
-@@ -1030,6 +1041,8 @@ void TabStyleViewsImpl::PaintBackgroundS
+@@ -492,10 +507,10 @@ gfx::Insets TabStyleViewsImpl::GetConten
+       tab_style()->GetSeparatorMargins().left() +
+       tab_style()->GetSeparatorSize().width() +
+       tab_style()->GetSeparatorMargins().right();
+-  if (IsRightSplitTab(tab())) {
++  if (IsRightSplitTab(tab()) && !tabs::AreHeliumVerticalTabsEnabled()) {
+     split_insets.set_left(total_separator_width / -2);
+   }
+-  if (IsLeftSplitTab(tab())) {
++  if (IsLeftSplitTab(tab()) && !tabs::AreHeliumVerticalTabsEnabled()) {
+     split_insets.set_right(total_separator_width / -2);
+   }
+ 
+@@ -1030,6 +1045,8 @@ void TabStyleViewsImpl::PaintBackgroundS
  }
  
  void TabStyleViewsImpl::PaintSeparators(gfx::Canvas* canvas) const {
@@ -1628,3 +1725,50 @@
  };
  
  #endif  // CHROME_BROWSER_UI_VIEWS_TABS_TAB_WIDTH_CONSTRAINTS_H_
+--- a/chrome/browser/ui/tabs/tab_style.cc
++++ b/chrome/browser/ui/tabs/tab_style.cc
+@@ -26,6 +26,7 @@ constexpr int kChromeRefreshSeparatorHei
+ // The padding from the top of the tab to the content area.
+ constexpr int kChromeRefreshTabVerticalPadding = 6;
+ constexpr int kChromeRefreshTabHorizontalPadding = 7;
++constexpr int kChromeRefreshTabHorizontalPaddingVertical = 5;
+ 
+ // The standard tab width is 232 DIP, excluding separators and overlap.
+ constexpr int kTabWidth = 200;
+@@ -70,7 +71,7 @@ int TabStyle::GetMinimumActiveWidth(cons
+   const gfx::Insets insets = GetContentsInsets();
+   const int min_active_width =
+       close_button_size + insets.left() + insets.right();
+-  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip)) {
++  if ((false)) {
+     return std::max(
+         min_active_width,
+         base::GetFieldTrialParamByFeatureAsInt(
+@@ -181,11 +182,14 @@ SkColor TabStyle::GetTabBackgroundColor(
+ }
+ 
+ gfx::Insets TabStyle::GetContentsInsets() const {
++  const int horizontal_padding = tabs::AreHeliumVerticalTabsEnabled()
++                                      ? kChromeRefreshTabHorizontalPaddingVertical
++                                      : kChromeRefreshTabHorizontalPadding;
+   return gfx::Insets::TLBR(
+       kChromeRefreshTabVerticalPadding + GetLayoutConstant(TAB_STRIP_PADDING),
+-      GetBottomCornerRadius() + kChromeRefreshTabHorizontalPadding,
++      GetBottomCornerRadius() + horizontal_padding,
+       kChromeRefreshTabVerticalPadding + GetLayoutConstant(TAB_STRIP_PADDING),
+-      GetBottomCornerRadius() + kChromeRefreshTabHorizontalPadding);
++      GetBottomCornerRadius() + horizontal_padding);
+ }
+ 
+ float TabStyle::GetSelectedTabOpacity() const {
+--- a/chrome/browser/ui/views/frame/browser_view.h
++++ b/chrome/browser/ui/views/frame/browser_view.h
+@@ -138,7 +138,7 @@ class BrowserView : public BrowserWindow
+ 
+  public:
+   // The width of the vertical tab strip.
+-  static constexpr int kVerticalTabStripWidth = 240;
++  static constexpr int kVerticalTabStripWidth = 210;
+ 
+   explicit BrowserView(std::unique_ptr<Browser> browser);
+   BrowserView(const BrowserView&) = delete;
