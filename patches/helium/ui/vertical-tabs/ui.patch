@@ -165,8 +165,8 @@
    }
  
 -  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip)) {
-+  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip)
-+        || tabs::AreHeliumVerticalTabsEnabled()) {
++  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip) ||
++      tabs::AreHeliumVerticalTabsEnabled()) {
      std::unique_ptr<TabStripScrollContainer> scroll_container =
          std::make_unique<TabStripScrollContainer>(std::move(tab_strip));
      tab_strip_scroll_container_ = scroll_container.get();
@@ -214,8 +214,8 @@
    SetProperty(views::kElementIdentifierKey, kTabStripRegionElementId);
  
 -  if (browser && tab_search_container && !render_tab_search_before_tab_strip_) {
-+  if (browser && tab_search_container && !render_tab_search_before_tab_strip_
-+      && !tabs::AreHeliumVerticalTabsEnabled()) {
++  if (browser && tab_search_container && !render_tab_search_before_tab_strip_ &&
++      !tabs::AreHeliumVerticalTabsEnabled()) {
      if (product_specifications_button) {
        product_specifications_button_ =
            AddChildView(std::move(product_specifications_button));
@@ -232,8 +232,8 @@
    if (tab_strip_container_->HitTestRect(
            get_target_rect(tab_strip_container_))) {
 -    if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip)) {
-+    if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip)
-+          || tabs::AreHeliumVerticalTabsEnabled()) {
++    if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip) ||
++        tabs::AreHeliumVerticalTabsEnabled()) {
        TabStripScrollContainer* scroll_container =
            views::AsViewClass<TabStripScrollContainer>(tab_strip_container_);
  
@@ -242,8 +242,8 @@
  void TabStripRegionView::Layout(PassKey) {
    const bool tab_search_container_before_tab_strip =
 -      tab_search_container_ && render_tab_search_before_tab_strip_;
-+      tab_search_container_ && render_tab_search_before_tab_strip_
-+      && !tabs::AreHeliumVerticalTabsEnabled();
++      tab_search_container_ && render_tab_search_before_tab_strip_ &&
++      !tabs::AreHeliumVerticalTabsEnabled();
    if (tab_search_container_before_tab_strip) {
      UpdateTabStripMargin();
    }
