@@ -89,13 +89,12 @@
      views::View* hit_view = GetEventHandlerForPoint(event.location());
 --- a/chrome/browser/ui/views/frame/browser_view_layout.cc
 +++ b/chrome/browser/ui/views/frame/browser_view_layout.cc
-@@ -540,10 +540,23 @@ void BrowserViewLayout::LayoutTabStripRe
+@@ -540,10 +540,22 @@ void BrowserViewLayout::LayoutTabStripRe
    if (web_app_frame_toolbar_) {
      tab_strip_region_bounds.Inset(gfx::Insets::TLBR(
          0, 0, 0, web_app_frame_toolbar_->GetPreferredSize().width()));
 +  } else if (tabs::AreHeliumVerticalTabsEnabled()) {
-+    int top_offset = tab_strip_region_bounds.x() != 0 ?
-+                     tab_strip_region_bounds.height() : 0;
++    int top_offset = tab_strip_region_bounds.height();
 +    tab_strip_region_bounds = gfx::Rect(0, top_offset,
 +        BrowserView::kVerticalTabStripWidth,
 +        available_bounds.height() - top_offset);
@@ -113,7 +112,7 @@
    } else {
      SetViewVisibility(tab_strip_region_view_, true);
      tab_strip_region_view_->SetBoundsRect(tab_strip_region_bounds);
-@@ -572,19 +585,19 @@ void BrowserViewLayout::LayoutToolbar(gf
+@@ -572,19 +584,19 @@ void BrowserViewLayout::LayoutToolbar(gf
    bool toolbar_visible = delegate_->IsToolbarVisible();
    SetViewVisibility(toolbar_, toolbar_visible);
  
@@ -140,7 +139,7 @@
    } else {
      int height = toolbar_visible ? toolbar_->GetPreferredSize().height() : 0;
      int width = available_bounds.width();
-@@ -727,8 +740,9 @@ BrowserViewLayout::CalculateContentsCont
+@@ -727,8 +739,9 @@ BrowserViewLayout::CalculateContentsCont
    contents_container_bounds.set_height(available_bounds.height() -
                                         available_bounds.y());
    int vertical_tab_offset = 0;
@@ -161,27 +160,28 @@
        !base::CommandLine::ForCurrentProcess()->HasSwitch("remove-tabsearch-button") &&
        (browser->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL)) {
      if (features::HasTabSearchToolbarButton()) {
-@@ -263,7 +264,7 @@ TabStripRegionView::TabStripRegionView(s
+@@ -263,7 +264,8 @@ TabStripRegionView::TabStripRegionView(s
      }
    }
  
 -  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip)) {
-+  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip) || tabs::AreHeliumVerticalTabsEnabled()) {
++  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip)
++        || tabs::AreHeliumVerticalTabsEnabled()) {
      std::unique_ptr<TabStripScrollContainer> scroll_container =
          std::make_unique<TabStripScrollContainer>(std::move(tab_strip));
      tab_strip_scroll_container_ = scroll_container.get();
-@@ -271,7 +272,9 @@ TabStripRegionView::TabStripRegionView(s
+@@ -271,7 +273,9 @@ TabStripRegionView::TabStripRegionView(s
      // Allow the |tab_strip_container_| to grow into the free space available in
      // the TabStripRegionView.
      const views::FlexSpecification tab_strip_container_flex_spec =
 -        views::FlexSpecification(views::LayoutOrientation::kHorizontal,
 +        views::FlexSpecification(tabs::AreHeliumVerticalTabsEnabled() ?
-+                                 views::LayoutOrientation::kVertical :
-+                                 views::LayoutOrientation::kHorizontal,
++                                  views::LayoutOrientation::kVertical :
++                                  views::LayoutOrientation::kHorizontal,
                                   views::MinimumFlexSizeRule::kScaleToMinimum,
                                   views::MaximumFlexSizeRule::kPreferred);
      tab_strip_container_->SetProperty(views::kFlexBehaviorKey,
-@@ -290,7 +293,7 @@ TabStripRegionView::TabStripRegionView(s
+@@ -290,7 +294,7 @@ TabStripRegionView::TabStripRegionView(s
                                        tab_strip_container_flex_spec);
    }
  
@@ -190,7 +190,7 @@
      std::unique_ptr<TabStripControlButton> tab_strip_control_button =
          std::make_unique<TabStripControlButton>(
              tab_strip_->controller(),
-@@ -313,17 +316,20 @@ TabStripRegionView::TabStripRegionView(s
+@@ -313,17 +317,20 @@ TabStripRegionView::TabStripRegionView(s
            ui::EF_MIDDLE_MOUSE_BUTTON);
    }
  
@@ -219,7 +219,7 @@
      if (product_specifications_button) {
        product_specifications_button_ =
            AddChildView(std::move(product_specifications_button));
-@@ -337,6 +343,7 @@ TabStripRegionView::TabStripRegionView(s
+@@ -337,6 +344,7 @@ TabStripRegionView::TabStripRegionView(s
      tab_strip_action_container_ =
          AddChildView(std::move(tab_strip_action_container));
    }
@@ -227,25 +227,27 @@
    UpdateTabStripMargin();
  }
  TabStripRegionView::~TabStripRegionView() {
-@@ -396,7 +403,7 @@ bool TabStripRegionView::IsRectInWindowC
+@@ -396,7 +404,8 @@ bool TabStripRegionView::IsRectInWindowC
    // true.
    if (tab_strip_container_->HitTestRect(
            get_target_rect(tab_strip_container_))) {
 -    if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip)) {
-+    if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip) || tabs::AreHeliumVerticalTabsEnabled()) {
++    if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip)
++          || tabs::AreHeliumVerticalTabsEnabled()) {
        TabStripScrollContainer* scroll_container =
            views::AsViewClass<TabStripScrollContainer>(tab_strip_container_);
  
-@@ -464,7 +471,7 @@ views::View::Views TabStripRegionView::G
+@@ -464,7 +473,8 @@ views::View::Views TabStripRegionView::G
  // manually calculated.
  void TabStripRegionView::Layout(PassKey) {
    const bool tab_search_container_before_tab_strip =
 -      tab_search_container_ && render_tab_search_before_tab_strip_;
-+      tab_search_container_ && render_tab_search_before_tab_strip_ && !tabs::AreHeliumVerticalTabsEnabled();
++      tab_search_container_ && render_tab_search_before_tab_strip_
++      && !tabs::AreHeliumVerticalTabsEnabled();
    if (tab_search_container_before_tab_strip) {
      UpdateTabStripMargin();
    }
-@@ -654,6 +661,11 @@ void TabStripRegionView::UpdateButtonBor
+@@ -654,6 +664,11 @@ void TabStripRegionView::UpdateButtonBor
  }
  
  void TabStripRegionView::UpdateTabStripMargin() {
