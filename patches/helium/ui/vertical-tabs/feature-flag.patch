@@ -34,9 +34,9 @@
  #endif  // CHROME_BROWSER_UI_TABS_FEATURES_H_
 --- a/chrome/browser/helium_flag_choices.h
 +++ b/chrome/browser/helium_flag_choices.h
-@@ -30,6 +30,8 @@ namespace helium {
-   constexpr const char kCanvasNoiseCommandLine[] = "fingerprinting-canvas-noise";
+@@ -31,6 +31,8 @@ namespace helium {
    constexpr const char kAudioContextJitterCommandLine[] = "fingerprinting-audio-context-jitter";
+   constexpr const char kMiddleClickAutoscrollCommandLine[] = "middle-click-autoscroll";
  
 +  constexpr const char kHeliumVerticalTabsCommandLine[] = "helium-vertical-tabs";
 +
@@ -45,10 +45,10 @@
  #endif  /* CHROME_BROWSER_HELIUM_FLAG_CHOICES_H_ */
 --- a/chrome/browser/helium_flag_entries.h
 +++ b/chrome/browser/helium_flag_entries.h
-@@ -24,4 +24,8 @@
-      "Audio Context fingerprint deception",
-      "Adds small random jitter (±0.01%) to audio data to prevent fingerprinting. Helium flag.",
-      kOsAll, FEATURE_VALUE_TYPE(blink::features::kAudioContextJitter)},
+@@ -28,4 +28,8 @@
+      "Middle Click Autoscroll",
+      "Enables autoscroll on middle click. Helium flag, Chromium feature.",
+      kOsDesktop, FEATURE_VALUE_TYPE(blink::features::kHeliumMiddleClickAutoscroll)},
 +    {helium::kHeliumVerticalTabsCommandLine,
 +     "Enable Helium Vertical Tabs",
 +     "Enables experimental vertical tabs layout in Helium. Will be unstable and buggy, WIP. Helium flag.",
