@@ -1,5 +1,14 @@
 --- a/chrome/browser/ui/ui_features.cc
 +++ b/chrome/browser/ui/ui_features.cc
+@@ -115,7 +115,7 @@ BASE_FEATURE(kReloadSelectionModel,
+ // when it is the only tab in selection model.
+ BASE_FEATURE(kCloseActiveTabInSplitViewViaHotkey,
+              "CloseActiveTabInSplitViewViaHotkey",
+-             base::FEATURE_DISABLED_BY_DEFAULT);
++             base::FEATURE_ENABLED_BY_DEFAULT);
+ 
+ // When enabled, a scrim is shown behind window modal dialogs to cover the
+ // entire browser window. This gives user a visual cue that the browser window
 @@ -137,7 +137,7 @@ BASE_FEATURE(kShowTabGroupsMacSystemMenu
               base::FEATURE_DISABLED_BY_DEFAULT);
  #endif  // BUILDFLAG(IS_MAC)
@@ -603,3 +612,19 @@
  
    raw_ptr<TabStripModel> tab_strip_model_ = nullptr;
  
+--- a/chrome/browser/ui/browser_commands.cc
++++ b/chrome/browser/ui/browser_commands.cc
+@@ -498,8 +498,12 @@ void ReloadInternal(Browser* browser,
+       browser->tab_strip_model()->GetActiveWebContents();
+ 
+   std::vector<WebContents*> tabs_to_reload;
++  const bool only_active_split_tab_selected =
++      browser->tab_strip_model()->IsActiveTabSplit() &&
++      browser->tab_strip_model()->selection_model().size() == 2;
+ 
+-  if (base::FeatureList::IsEnabled(features::kReloadSelectionModel)) {
++  if (base::FeatureList::IsEnabled(features::kReloadSelectionModel)
++      || only_active_split_tab_selected) {
+     tabs_to_reload.push_back(
+         browser->tab_strip_model()->GetActiveWebContents());
+   } else {
