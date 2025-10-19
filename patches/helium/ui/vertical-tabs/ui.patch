@@ -152,20 +152,41 @@
    }
 --- a/chrome/browser/ui/views/frame/tab_strip_region_view.cc
 +++ b/chrome/browser/ui/views/frame/tab_strip_region_view.cc
-@@ -196,8 +196,20 @@ TabStripRegionView::TabStripRegionView(s
-       this, views::kCascadingBackgroundColor,
-       kColorTabBackgroundInactiveFrameInactive);
+@@ -180,8 +180,30 @@ class TabSearchPositionMetricsLogger {
+   base::WeakPtrFactory<TabSearchPositionMetricsLogger> weak_ptr_factory_;
+ };
  
-+  if (tabs::AreHeliumVerticalTabsEnabled()) {
-+    BrowserView* browser_view =
-+        BrowserView::GetBrowserViewForBrowser(tab_strip->controller()->GetBrowser());
-+    if (browser_view) {
-+      SetBackground(views::CreateSolidBackground(
-+          browser_view->frame()->GetFrameView()->GetFrameColor(
-+              BrowserFrameActiveState::kUseCurrent)));
-+    }
++// This is copied from chrome/browser/ui/views/toolbar/toolbar_view.cc, but simplified.
++class FrameLikeBackground : public views::Background {
++ public:
++  explicit FrameLikeBackground(BrowserView* browser_view)
++      : browser_view_(browser_view) {}
++
++ private:
++  // views::Background:
++  void Paint(gfx::Canvas* canvas, views::View* view) const override {
++      SkColor frame_color =
++        browser_view_->frame()->GetFrameView()->GetFrameColor(
++          BrowserFrameActiveState::kUseCurrent);
++      canvas->DrawColor(frame_color);
 +  }
 +
++  const raw_ptr<BrowserView> browser_view_;
++};
++
+ TabStripRegionView::TabStripRegionView(BrowserView* browser_view)
+-    : TabStripRegionView(CreateTabStrip(browser_view)) {}
++    : TabStripRegionView(CreateTabStrip(browser_view)) {
++  if (tabs::AreHeliumVerticalTabsEnabled()) {
++    SetBackground(std::make_unique<FrameLikeBackground>(browser_view));
++  }
++}
+ 
+ TabStripRegionView::TabStripRegionView(std::unique_ptr<TabStrip> tab_strip)
+     : profile_(tab_strip->GetBrowserWindowInterface()
+@@ -197,7 +219,9 @@ TabStripRegionView::TabStripRegionView(s
+       kColorTabBackgroundInactiveFrameInactive);
+ 
    SetLayoutManager(std::make_unique<views::FlexLayout>())
 -      ->SetOrientation(views::LayoutOrientation::kHorizontal);
 +      ->SetOrientation(tabs::AreHeliumVerticalTabsEnabled() ?
@@ -174,7 +195,7 @@
  
    GetViewAccessibility().SetRole(ax::mojom::Role::kTabList);
    GetViewAccessibility().SetIsMultiselectable(true);
-@@ -211,6 +223,7 @@ TabStripRegionView::TabStripRegionView(s
+@@ -211,6 +235,7 @@ TabStripRegionView::TabStripRegionView(s
    std::unique_ptr<TabStripActionContainer> tab_strip_action_container;
    std::unique_ptr<ProductSpecificationsButton> product_specifications_button;
    if (browser &&
@@ -182,7 +203,7 @@
        !base::CommandLine::ForCurrentProcess()->HasSwitch("remove-tabsearch-button") &&
        (browser->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL)) {
      if (features::HasTabSearchToolbarButton()) {
-@@ -263,7 +276,38 @@ TabStripRegionView::TabStripRegionView(s
+@@ -263,7 +288,38 @@ TabStripRegionView::TabStripRegionView(s
      }
    }
  
@@ -222,7 +243,7 @@
      std::unique_ptr<TabStripScrollContainer> scroll_container =
          std::make_unique<TabStripScrollContainer>(std::move(tab_strip));
      tab_strip_scroll_container_ = scroll_container.get();
-@@ -272,11 +316,16 @@ TabStripRegionView::TabStripRegionView(s
+@@ -272,11 +328,16 @@ TabStripRegionView::TabStripRegionView(s
      // the TabStripRegionView.
      const views::FlexSpecification tab_strip_container_flex_spec =
          views::FlexSpecification(views::LayoutOrientation::kHorizontal,
@@ -243,7 +264,7 @@
    } else {
      tab_strip_container_ = AddChildView(std::move(tab_strip));
  
-@@ -290,7 +339,7 @@ TabStripRegionView::TabStripRegionView(s
+@@ -290,7 +351,7 @@ TabStripRegionView::TabStripRegionView(s
                                        tab_strip_container_flex_spec);
    }
  
@@ -252,7 +273,7 @@
      std::unique_ptr<TabStripControlButton> tab_strip_control_button =
          std::make_unique<TabStripControlButton>(
              tab_strip_->controller(),
-@@ -313,17 +362,20 @@ TabStripRegionView::TabStripRegionView(s
+@@ -313,17 +374,20 @@ TabStripRegionView::TabStripRegionView(s
            ui::EF_MIDDLE_MOUSE_BUTTON);
    }
  
@@ -281,7 +302,7 @@
      if (product_specifications_button) {
        product_specifications_button_ =
            AddChildView(std::move(product_specifications_button));
-@@ -337,6 +389,7 @@ TabStripRegionView::TabStripRegionView(s
+@@ -337,6 +401,7 @@ TabStripRegionView::TabStripRegionView(s
      tab_strip_action_container_ =
          AddChildView(std::move(tab_strip_action_container));
    }
@@ -289,7 +310,7 @@
    UpdateTabStripMargin();
  }
  TabStripRegionView::~TabStripRegionView() {
-@@ -396,7 +449,8 @@ bool TabStripRegionView::IsRectInWindowC
+@@ -396,7 +461,8 @@ bool TabStripRegionView::IsRectInWindowC
    // true.
    if (tab_strip_container_->HitTestRect(
            get_target_rect(tab_strip_container_))) {
@@ -299,7 +320,7 @@
        TabStripScrollContainer* scroll_container =
            views::AsViewClass<TabStripScrollContainer>(tab_strip_container_);
  
-@@ -464,7 +518,8 @@ views::View::Views TabStripRegionView::G
+@@ -464,7 +530,8 @@ views::View::Views TabStripRegionView::G
  // manually calculated.
  void TabStripRegionView::Layout(PassKey) {
    const bool tab_search_container_before_tab_strip =
@@ -309,7 +330,7 @@
    if (tab_search_container_before_tab_strip) {
      UpdateTabStripMargin();
    }
-@@ -489,7 +544,7 @@ void TabStripRegionView::Layout(PassKey)
+@@ -489,7 +556,7 @@ void TabStripRegionView::Layout(PassKey)
  
    views::View* button_to_paint_to_layer = new_tab_button_;
  
@@ -318,7 +339,7 @@
      // The button needs to be layered on top of the tabstrip to achieve
      // negative margins.
      gfx::Size button_size = button_to_paint_to_layer->GetPreferredSize();
-@@ -654,6 +709,11 @@ void TabStripRegionView::UpdateButtonBor
+@@ -654,6 +721,11 @@ void TabStripRegionView::UpdateButtonBor
  }
  
  void TabStripRegionView::UpdateTabStripMargin() {
