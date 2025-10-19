@@ -72,7 +72,7 @@
      // The visible size is the button's hover shape size. The actual size
      // includes the border insets for the button.
      const int close_button_visible_size =
-@@ -426,7 +457,8 @@ void Tab::Layout(PassKey) {
+@@ -426,11 +457,12 @@ void Tab::Layout(PassKey) {
           close_button_actual_size});
      close_x = visible_left - after_title_padding;
    }
@@ -82,6 +82,20 @@
  
    if (showing_alert_indicator_) {
      int right = contents_rect.right();
+-    if (showing_close_button_) {
++    if (showing_unpin_button_ || showing_close_button_) {
+       right = close_x;
+       if (extra_alert_indicator_padding_) {
+         right -= ui::TouchUiController::Get()->touch_ui()
+@@ -471,7 +503,7 @@ void Tab::Layout(PassKey) {
+     int title_right = contents_rect.right();
+     if (showing_alert_indicator_) {
+       title_right = alert_indicator_button_->x() - after_title_padding;
+-    } else if (showing_close_button_) {
++    } else if (showing_unpin_button_ || showing_close_button_) {
+       // Allow the title to overlay the close button's empty border padding.
+       title_right = close_x - after_title_padding;
+     }
 @@ -1004,6 +1036,7 @@ void Tab::SetData(TabRendererData data)
    }
    if (old.pinned != data_.pinned) {
