@@ -51,20 +51,26 @@
        !base::CommandLine::ForCurrentProcess()->HasSwitch("remove-tabsearch-button") &&
        (browser->GetType() == BrowserWindowInterface::Type::TYPE_NORMAL)) {
      if (features::HasTabSearchToolbarButton()) {
-@@ -263,7 +288,38 @@ TabStripRegionView::TabStripRegionView(s
+@@ -263,7 +288,82 @@ TabStripRegionView::TabStripRegionView(s
      }
    }
  
 -  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip)) {
-+  // New tab button for vertical tabs (before the tab strip).
++  // NTB and tab search for vertical tabs, in one container (before the tab strip).
 +  if (ShouldShowNewTabButton(browser) && tabs::AreHeliumVerticalTabsEnabled()) {
++    auto buttons_container = std::make_unique<views::View>();
++    buttons_container->SetLayoutManager(std::make_unique<views::FlexLayout>())
++      ->SetOrientation(views::LayoutOrientation::kHorizontal);
++
++    buttons_container->SetBorder(views::CreateEmptyBorder(
++                                 gfx::Insets::VH(3, 6)));
++
 +    std::unique_ptr<TabStripControlButton> tab_strip_control_button =
 +        std::make_unique<TabStripControlButton>(
 +            tab_strip_->controller(),
 +            base::BindRepeating(&TabStrip::NewTabButtonPressed,
 +                                base::Unretained(tab_strip_)),
 +            vector_icons::kAddIcon,
-+            l10n_util::GetStringUTF16(IDS_TOOLTIP_NEW_TAB),
 +            Edge::kNone);
 +    tab_strip_control_button->SetProperty(views::kElementIdentifierKey,
 +                                          kNewTabButtonElementId);
@@ -73,7 +79,8 @@
 +    tab_strip_control_button->layer()->SetFillsBoundsOpaquely(false);
 +    tab_strip_control_button->layer()->SetOpacity(0.8f);
 +
-+    new_tab_button_ = AddChildView(std::move(tab_strip_control_button));
++    new_tab_button_ = buttons_container->AddChildView(
++        std::move(tab_strip_control_button));
 +
 +    new_tab_button_->SetTooltipText(
 +        l10n_util::GetStringUTF16(IDS_TOOLTIP_NEW_TAB));
@@ -84,6 +91,43 @@
 +    new_tab_button_->SetTriggerableEventFlags(
 +        new_tab_button_->GetTriggerableEventFlags() |
 +        ui::EF_MIDDLE_MOUSE_BUTTON);
++
++    // Tab search button
++    std::unique_ptr<TabStripControlButton> tab_search_button =
++        std::make_unique<TabStripControlButton>(
++            tab_strip_->controller(),
++            base::BindRepeating(&TabStrip::TabSearchButtonPressed,
++                                base::Unretained(tab_strip_)),
++            vector_icons::kTabSearchIcon,
++            Edge::kNone);
++    tab_search_button->SetProperty(views::kElementIdentifierKey,
++                                   kTabSearchButtonElementId);
++
++    tab_search_button->SetPaintToLayer();
++    tab_search_button->layer()->SetFillsBoundsOpaquely(false);
++    tab_search_button->layer()->SetOpacity(0.8f);
++
++    tab_search_button_ = buttons_container->AddChildView(
++        std::move(tab_search_button));
++
++    tab_search_button_->SetTooltipText(
++        l10n_util::GetStringUTF16(IDS_TAB_SEARCH_MENU));
++    tab_search_button_->GetViewAccessibility().SetName(
++        l10n_util::GetStringUTF16(IDS_TAB_SEARCH_MENU));
++
++    buttons_container_ = AddChildView(std::move(buttons_container));
++
++    const auto button_flex = views::FlexSpecification(
++        views::LayoutOrientation::kHorizontal,
++        views::MinimumFlexSizeRule::kScaleToZero,
++        views::MaximumFlexSizeRule::kUnbounded).WithOrder(1);
++
++    UpdateBorderInsetsIfNeeded(new_tab_button_, gfx::Insets::VH(0, 0));
++    UpdateBorderInsetsIfNeeded(tab_search_button_, gfx::Insets::VH(0, 0));
++
++    new_tab_button_->SetProperty(views::kFlexBehaviorKey, button_flex);
++    tab_search_button_->SetProperty(views::kFlexBehaviorKey, button_flex);
++    buttons_container_->SetProperty(views::kFlexBehaviorKey, button_flex);
 +  }
 +
 +  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip) ||
@@ -91,7 +135,7 @@
      std::unique_ptr<TabStripScrollContainer> scroll_container =
          std::make_unique<TabStripScrollContainer>(std::move(tab_strip));
      tab_strip_scroll_container_ = scroll_container.get();
-@@ -272,11 +328,16 @@ TabStripRegionView::TabStripRegionView(s
+@@ -272,11 +372,16 @@ TabStripRegionView::TabStripRegionView(s
      // the TabStripRegionView.
      const views::FlexSpecification tab_strip_container_flex_spec =
          views::FlexSpecification(views::LayoutOrientation::kHorizontal,
@@ -112,7 +156,7 @@
    } else {
      tab_strip_container_ = AddChildView(std::move(tab_strip));
  
-@@ -290,7 +351,7 @@ TabStripRegionView::TabStripRegionView(s
+@@ -290,7 +395,7 @@ TabStripRegionView::TabStripRegionView(s
                                        tab_strip_container_flex_spec);
    }
  
@@ -121,7 +165,7 @@
      std::unique_ptr<TabStripControlButton> tab_strip_control_button =
          std::make_unique<TabStripControlButton>(
              tab_strip_->controller(),
-@@ -313,17 +374,20 @@ TabStripRegionView::TabStripRegionView(s
+@@ -313,17 +418,20 @@ TabStripRegionView::TabStripRegionView(s
            ui::EF_MIDDLE_MOUSE_BUTTON);
    }
  
@@ -150,7 +194,7 @@
      if (product_specifications_button) {
        product_specifications_button_ =
            AddChildView(std::move(product_specifications_button));
-@@ -337,6 +401,7 @@ TabStripRegionView::TabStripRegionView(s
+@@ -337,6 +445,7 @@ TabStripRegionView::TabStripRegionView(s
      tab_strip_action_container_ =
          AddChildView(std::move(tab_strip_action_container));
    }
@@ -158,7 +202,22 @@
    UpdateTabStripMargin();
  }
  TabStripRegionView::~TabStripRegionView() {
-@@ -396,7 +461,8 @@ bool TabStripRegionView::IsRectInWindowC
+@@ -345,7 +454,13 @@ TabStripRegionView::~TabStripRegionView(
+   if (tab_strip_action_container_) {
+     RemoveChildViewT(std::exchange(tab_strip_action_container_, nullptr));
+   }
+-  if (new_tab_button_) {
++  if (buttons_container_) {
++    RemoveChildViewT(std::exchange(buttons_container_, nullptr));
++    // buttons_container_ owns new_tab_button_ and tab_search_button_, so
++    // we just null them out
++    new_tab_button_ = nullptr;
++    tab_search_button_ = nullptr;
++  } else if (new_tab_button_) {
+     RemoveChildViewT(std::exchange(new_tab_button_, nullptr));
+   }
+   if (tab_search_container_) {
+@@ -396,7 +511,8 @@ bool TabStripRegionView::IsRectInWindowC
    // true.
    if (tab_strip_container_->HitTestRect(
            get_target_rect(tab_strip_container_))) {
@@ -168,7 +227,29 @@
        TabStripScrollContainer* scroll_container =
            views::AsViewClass<TabStripScrollContainer>(tab_strip_container_);
  
-@@ -464,7 +530,8 @@ views::View::Views TabStripRegionView::G
+@@ -436,13 +552,15 @@ views::View::Views TabStripRegionView::G
+     children.emplace_back(tab_strip_container_.get());
+   }
+ 
+-    if (new_tab_button_) {
+-      children.emplace_back(new_tab_button_.get());
+-    }
++  if (buttons_container_) {
++    children.emplace_back(buttons_container_.get());
++  } else if (new_tab_button_) {
++    children.emplace_back(new_tab_button_.get());
++  }
+ 
+-    if (tab_search_container_) {
+-      children.emplace_back(tab_search_container_.get());
+-    }
++  if (tab_search_container_) {
++    children.emplace_back(tab_search_container_.get());
++  }
+ 
+   if (product_specifications_button_) {
+     children.emplace_back(product_specifications_button_.get());
+@@ -464,7 +582,8 @@ views::View::Views TabStripRegionView::G
  // manually calculated.
  void TabStripRegionView::Layout(PassKey) {
    const bool tab_search_container_before_tab_strip =
@@ -178,7 +259,7 @@
    if (tab_search_container_before_tab_strip) {
      UpdateTabStripMargin();
    }
-@@ -489,7 +556,7 @@ void TabStripRegionView::Layout(PassKey)
+@@ -489,7 +608,7 @@ void TabStripRegionView::Layout(PassKey)
  
    views::View* button_to_paint_to_layer = new_tab_button_;
  
@@ -187,7 +268,7 @@
      // The button needs to be layered on top of the tabstrip to achieve
      // negative margins.
      gfx::Size button_size = button_to_paint_to_layer->GetPreferredSize();
-@@ -654,6 +721,11 @@ void TabStripRegionView::UpdateButtonBor
+@@ -654,6 +773,11 @@ void TabStripRegionView::UpdateButtonBor
  }
  
  void TabStripRegionView::UpdateTabStripMargin() {
@@ -201,7 +282,15 @@
    std::optional<int> tab_strip_right_margin;
 --- a/chrome/browser/ui/views/tabs/tab_strip.cc
 +++ b/chrome/browser/ui/views/tabs/tab_strip.cc
-@@ -171,6 +171,15 @@ class TabStrip::TabDragContextImpl : pub
+@@ -45,6 +45,7 @@
+ #include "chrome/browser/defaults.h"
+ #include "chrome/browser/themes/theme_properties.h"
+ #include "chrome/browser/themes/theme_service_factory.h"
++#include "chrome/browser/ui/browser_commands.h"
+ #include "chrome/browser/ui/browser_element_identifiers.h"
+ #include "chrome/browser/ui/color/chrome_color_id.h"
+ #include "chrome/browser/ui/layout_constants.h"
+@@ -171,6 +172,15 @@ class TabStrip::TabDragContextImpl : pub
  
    gfx::Size CalculatePreferredSize(
        const views::SizeBounds& available_size) const override {
@@ -217,7 +306,7 @@
      int max_child_x = 0;
      for (views::View* child : children()) {
        if (!views::IsViewClass<TabSlotView>(child)) {
-@@ -179,7 +188,7 @@ class TabStrip::TabDragContextImpl : pub
+@@ -179,7 +189,7 @@ class TabStrip::TabDragContextImpl : pub
        max_child_x = std::max(max_child_x, child->bounds().right());
      }
  
@@ -226,7 +315,7 @@
    }
  
    bool OnMouseDragged(const ui::MouseEvent& event) override {
-@@ -311,7 +320,11 @@ class TabStrip::TabDragContextImpl : pub
+@@ -311,7 +321,11 @@ class TabStrip::TabDragContextImpl : pub
  
            dragging_views.push_back(other_tab);
            if (other_tab == source) {
@@ -239,7 +328,7 @@
            }
          }
        }
-@@ -344,7 +357,8 @@ class TabStrip::TabDragContextImpl : pub
+@@ -344,7 +358,8 @@ class TabStrip::TabDragContextImpl : pub
      // `tab_drag_controller_`. If Init returns DELETED, then `drag_controller_`
      // is nullptr or it points to a *different instance*.
      if (drag_controller_->Init(this, source, dragging_views, gfx::Point(x, y),
@@ -249,7 +338,7 @@
                                 EventSourceFromEvent(event)) ==
          TabDragController::Liveness::DELETED) {
        return;
-@@ -500,14 +514,28 @@ class TabStrip::TabDragContextImpl : pub
+@@ -500,14 +515,28 @@ class TabStrip::TabDragContextImpl : pub
          tab_strip_->width());
    }
  
@@ -278,7 +367,7 @@
    int GetInsertionIndexForDraggedBounds(const gfx::Rect& dragged_bounds,
                                          std::vector<TabSlotView*> dragged_views,
                                          int num_dragged_tabs) const override {
-@@ -551,8 +579,15 @@ class TabStrip::TabDragContextImpl : pub
+@@ -551,8 +580,15 @@ class TabStrip::TabDragContextImpl : pub
      std::vector<gfx::Rect> bounds;
      const int overlap = TabStyle::Get()->GetTabOverlap();
      int x = 0;
@@ -294,7 +383,7 @@
        bounds.emplace_back(x, height() - view->height(), width, view->height());
        x += width - overlap;
      }
-@@ -611,9 +646,12 @@ class TabStrip::TabDragContextImpl : pub
+@@ -611,9 +647,12 @@ class TabStrip::TabDragContextImpl : pub
        dragged_view->set_dragging(true);
        if (TabGroupHeader* header =
                views::AsViewClass<TabGroupHeader>(dragged_view)) {
@@ -310,7 +399,7 @@
          // Make sure the bounds of the group views are up to date right now
          // instead of waiting for subsequent drag events - if we are dragging a
          // window by a group header, we won't get any more events. See
-@@ -651,10 +689,12 @@ class TabStrip::TabDragContextImpl : pub
+@@ -651,10 +690,12 @@ class TabStrip::TabDragContextImpl : pub
        const TabGroupHeader* const header =
            views::AsViewClass<TabGroupHeader>(slot_view);
        if (header) {
@@ -327,7 +416,7 @@
          ideal_bounds =
              tab_strip_->tab_container_->GetIdealBounds(header->group().value());
        } else {
-@@ -894,6 +934,21 @@ class TabStrip::TabDragContextImpl : pub
+@@ -894,6 +935,21 @@ class TabStrip::TabDragContextImpl : pub
          continue;
        }
  
@@ -349,7 +438,7 @@
        // If there's a group header here, and we're dragging a group, we might
        // end up on either side of that header. Check both cases to find the
        // best option.
-@@ -911,7 +966,9 @@ class TabStrip::TabDragContextImpl : pub
+@@ -911,7 +967,9 @@ class TabStrip::TabDragContextImpl : pub
                 : 0);
        const int right_distance = std::abs(dragged_bounds.x() - right_ideal_x);
  
@@ -360,7 +449,7 @@
        if (distance < min_distance) {
          min_distance = distance;
          min_distance_index = candidate_index;
-@@ -1009,6 +1066,26 @@ class TabStrip::TabDragContextImpl : pub
+@@ -1009,6 +1067,26 @@ class TabStrip::TabDragContextImpl : pub
      return ideal_x - tab_overlap;
    }
  
@@ -387,7 +476,7 @@
    // There might be a group starting at `candidate_index`. If there is,
    // this determines how the ideal x would change if the dragged tabs were
    // added to that group, thereby moving them to that header's right.
-@@ -1036,6 +1113,27 @@ class TabStrip::TabDragContextImpl : pub
+@@ -1036,6 +1114,27 @@ class TabStrip::TabDragContextImpl : pub
      return header_width;
    }
  
@@ -415,7 +504,7 @@
    const raw_ptr<TabStrip, DanglingUntriaged> tab_strip_;
  
    // Responsible for animating tabs during drag sessions.
-@@ -1105,8 +1203,20 @@ void TabStrip::SetAvailableWidthCallback
+@@ -1105,8 +1204,20 @@ void TabStrip::SetAvailableWidthCallback
    tab_container_->SetAvailableWidthCallback(available_width_callback);
  }
  
@@ -436,7 +525,7 @@
    int width = 0;
    for (const TabSlotView* view : views) {
      width += view->width();
-@@ -1722,6 +1832,14 @@ void TabStrip::ToggleTabAudioMute(Tab* t
+@@ -1722,6 +1833,14 @@ void TabStrip::ToggleTabAudioMute(Tab* t
    }
  }
  
@@ -451,7 +540,7 @@
  void TabStrip::ShiftTabNext(Tab* tab) {
    ShiftTabRelative(tab, 1);
  }
-@@ -2143,7 +2261,7 @@ gfx::Size TabStrip::GetMinimumSize() con
+@@ -2143,7 +2262,7 @@ gfx::Size TabStrip::GetMinimumSize() con
    // `tab_container_` and `drag_context_` overlap (both share TabStrip's
    // origin), so we need to be able to cover the union of their bounds.
    gfx::Size min_size = tab_container_->GetMinimumSize();
@@ -460,7 +549,7 @@
  
    return min_size;
  }
-@@ -2159,6 +2277,13 @@ gfx::Size TabStrip::CalculatePreferredSi
+@@ -2159,6 +2278,13 @@ gfx::Size TabStrip::CalculatePreferredSi
  }
  
  void TabStrip::Layout(PassKey) {
@@ -474,9 +563,20 @@
    if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip)) {
      // With tab scrolling, the TabStrip is the contents view of a ScrollView and
      // as such is expected to set its own bounds during layout.
+@@ -2283,6 +2409,10 @@ void TabStrip::NewTabButtonPressed(const
+   controller_->CreateNewTab();
+ }
+ 
++void TabStrip::TabSearchButtonPressed() {
++  chrome::ShowTabSearch(controller_->GetBrowser());
++}
++
+ bool TabStrip::ShouldHighlightCloseButtonAfterRemove() {
+   return tab_container_->InTabClose();
+ }
 --- a/chrome/browser/ui/views/tabs/tab_strip.h
 +++ b/chrome/browser/ui/views/tabs/tab_strip.h
-@@ -87,6 +87,8 @@ class TabStrip : public views::View,
+@@ -87,8 +87,11 @@ class TabStrip : public views::View,
  
    void SetAvailableWidthCallback(
        base::RepeatingCallback<int()> available_width_callback);
@@ -484,8 +584,11 @@
 +      base::RepeatingCallback<int()> available_height_callback);
  
    void NewTabButtonPressed(const ui::Event& event);
++  void TabSearchButtonPressed();
  
-@@ -274,6 +276,7 @@ class TabStrip : public views::View,
+   // Returns the size needed for the specified views. This is invoked during
+   // drag and drop to calculate offsets and positioning.
+@@ -274,6 +277,7 @@ class TabStrip : public views::View,
    void ToggleSelected(Tab* tab) override;
    void AddSelectionFromAnchorTo(Tab* tab) override;
    void CloseTab(Tab* tab, CloseTabSource source) override;
