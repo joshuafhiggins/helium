@@ -280,6 +280,20 @@
    // The new tab button overlaps the tabstrip. Render it to a layer and adjust
    // the tabstrip right margin to reserve space for it.
    std::optional<int> tab_strip_right_margin;
+--- a/chrome/browser/ui/views/frame/tab_strip_region_view.h
++++ b/chrome/browser/ui/views/frame/tab_strip_region_view.h
+@@ -139,9 +139,11 @@ class TabStripRegionView final : public
+   raw_ptr<TabStripActionContainer> tab_strip_action_container_ = nullptr;
+   raw_ptr<views::View> tab_strip_container_ = nullptr;
+   raw_ptr<views::View> reserved_grab_handle_space_ = nullptr;
++  raw_ptr<views::View> buttons_container_ = nullptr;
+   raw_ptr<TabStrip> tab_strip_ = nullptr;
+   raw_ptr<TabStripScrollContainer> tab_strip_scroll_container_ = nullptr;
+   raw_ptr<views::Button> new_tab_button_ = nullptr;
++  raw_ptr<views::Button> tab_search_button_ = nullptr;
+   raw_ptr<TabSearchContainer> tab_search_container_ = nullptr;
+   raw_ptr<ProductSpecificationsButton> product_specifications_button_ = nullptr;
+ 
 --- a/chrome/browser/ui/views/tabs/tab_strip.cc
 +++ b/chrome/browser/ui/views/tabs/tab_strip.cc
 @@ -45,6 +45,7 @@
