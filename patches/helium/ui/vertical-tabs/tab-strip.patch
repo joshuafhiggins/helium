@@ -436,7 +436,22 @@
    int width = 0;
    for (const TabSlotView* view : views) {
      width += view->width();
-@@ -2143,7 +2253,7 @@ gfx::Size TabStrip::GetMinimumSize() con
+@@ -1722,6 +1832,14 @@ void TabStrip::ToggleTabAudioMute(Tab* t
+   }
+ }
+ 
++void TabStrip::ToggleTabPin(Tab* tab) {
++  std::optional<int> model_index = GetModelIndexOf(tab);
++  if (model_index.has_value()) {
++    GetBrowser()->tab_strip_model()->ExecuteContextMenuCommand(
++        model_index.value(), TabStripModel::CommandTogglePinned);
++  }
++}
++
+ void TabStrip::ShiftTabNext(Tab* tab) {
+   ShiftTabRelative(tab, 1);
+ }
+@@ -2143,7 +2261,7 @@ gfx::Size TabStrip::GetMinimumSize() con
    // `tab_container_` and `drag_context_` overlap (both share TabStrip's
    // origin), so we need to be able to cover the union of their bounds.
    gfx::Size min_size = tab_container_->GetMinimumSize();
@@ -445,7 +460,7 @@
  
    return min_size;
  }
-@@ -2159,6 +2269,13 @@ gfx::Size TabStrip::CalculatePreferredSi
+@@ -2159,6 +2277,13 @@ gfx::Size TabStrip::CalculatePreferredSi
  }
  
  void TabStrip::Layout(PassKey) {
@@ -469,6 +484,26 @@
 +      base::RepeatingCallback<int()> available_height_callback);
  
    void NewTabButtonPressed(const ui::Event& event);
+ 
+@@ -274,6 +276,7 @@ class TabStrip : public views::View,
+   void ToggleSelected(Tab* tab) override;
+   void AddSelectionFromAnchorTo(Tab* tab) override;
+   void CloseTab(Tab* tab, CloseTabSource source) override;
++  void ToggleTabPin(Tab* tab) override;
+   void ToggleTabAudioMute(Tab* tab) override;
+   void ShiftTabNext(Tab* tab) override;
+   void ShiftTabPrevious(Tab* tab) override;
+--- a/chrome/browser/ui/views/tabs/tab_slot_controller.h
++++ b/chrome/browser/ui/views/tabs/tab_slot_controller.h
+@@ -75,6 +75,9 @@ class TabSlotController {
+   // Closes the tab.
+   virtual void CloseTab(Tab* tab, CloseTabSource source) = 0;
+ 
++  // Toggles whether the tab is pinned.
++  virtual void ToggleTabPin(Tab* tab) = 0;
++
+   // Toggles whether tab-wide audio muting is active.
+   virtual void ToggleTabAudioMute(Tab* tab) = 0;
  
 --- a/chrome/browser/ui/views/tabs/tab_strip_layout.cc
 +++ b/chrome/browser/ui/views/tabs/tab_strip_layout.cc
