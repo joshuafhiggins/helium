@@ -19,16 +19,17 @@
  
  std::vector<Tab*> TabContainerImpl::AddTabs(
      std::vector<TabInsertionParams> tabs_params) {
-@@ -258,7 +263,7 @@ void TabContainerImpl::SetActiveTab(std:
+@@ -258,7 +263,8 @@ void TabContainerImpl::SetActiveTab(std:
      CompleteAnimationAndLayout();
    }
  
 -  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip) &&
-+  if ((base::FeatureList::IsEnabled(tabs::kScrollableTabStrip) || tabs::AreHeliumVerticalTabsEnabled()) &&
++  if ((base::FeatureList::IsEnabled(tabs::kScrollableTabStrip) ||
++        tabs::AreHeliumVerticalTabsEnabled()) &&
        new_active_index.has_value()) {
      ScrollTabToVisible(new_active_index.value());
    }
-@@ -329,14 +334,33 @@ void TabContainerImpl::ScrollTabToVisibl
+@@ -329,14 +335,33 @@ void TabContainerImpl::ScrollTabToVisibl
  
    // If the tab strip won't be scrollable after the current tabstrip animations
    // complete, scroll animation wouldn't be meaningful.
@@ -65,7 +66,7 @@
    if ((active_tab_ideal_bounds.x() >= visible_content_rect->x()) &&
        (active_tab_ideal_bounds.right() <= visible_content_rect->right())) {
      return;
-@@ -367,6 +391,15 @@ void TabContainerImpl::ScrollTabContaine
+@@ -367,6 +392,15 @@ void TabContainerImpl::ScrollTabContaine
      return;
    }
  
@@ -81,7 +82,7 @@
    // If tabcontainer is scrolled towards trailing tab, the start edge should
    // have the x coordinate of the right bound. If it is scrolled towards the
    // leading tab it should have the x coordinate of the left bound.
-@@ -454,6 +487,11 @@ void TabContainerImpl::ToggleTabGroup(
+@@ -454,6 +488,11 @@ void TabContainerImpl::ToggleTabGroup(
              ? CloseTabSource::kFromMouse
              : CloseTabSource::kFromTouch;
  
@@ -93,7 +94,7 @@
      EnterTabClosingMode(
          tabs_view_model_.ideal_bounds(GetTabCount() - 1).right() -
              current_group_width + collapsed_group_width,
-@@ -723,6 +761,12 @@ int TabContainerImpl::GetAvailableWidthF
+@@ -723,6 +762,12 @@ int TabContainerImpl::GetAvailableWidthF
               : parent()->GetAvailableSize(this).width().value();
  }
  
@@ -106,27 +107,29 @@
  void TabContainerImpl::EnterTabClosingMode(std::optional<int> override_width,
                                             CloseTabSource source) {
    // Tab closing mode only makes sense if the tab was closed as a direct result
-@@ -794,7 +838,7 @@ void TabContainerImpl::SetTabSlotVisibil
+@@ -794,7 +839,8 @@ void TabContainerImpl::SetTabSlotVisibil
      const bool is_collapsed =
          (current_group.has_value() &&
           controller_->IsGroupCollapsed(current_group.value()) &&
 -         tab->bounds().width() <= tab->tab_style()->GetTabOverlap());
-+         (tabs::AreHeliumVerticalTabsEnabled() ? true : tab->bounds().width() <= tab->tab_style()->GetTabOverlap()));
++         (tabs::AreHeliumVerticalTabsEnabled() ||
++          tab->bounds().width() <= tab->tab_style()->GetTabOverlap()));
      const bool should_be_visible = is_collapsed ? false : last_tab_visible;
  
      // If we change the visibility of a tab in a group, we must recalculate that
-@@ -885,6 +929,10 @@ void TabContainerImpl::PaintChildren(con
+@@ -885,6 +931,11 @@ void TabContainerImpl::PaintChildren(con
  }
  
  gfx::Size TabContainerImpl::GetMinimumSize() const {
 +  if (tabs::AreHeliumVerticalTabsEnabled()) {
-+    return gfx::Size(BrowserView::kVerticalTabStripWidth, GetLayoutConstant(TAB_STRIP_HEIGHT));
++    return gfx::Size(BrowserView::kVerticalTabStripWidth,
++        GetLayoutConstant(TAB_STRIP_HEIGHT));
 +  }
 +
    // During animations, our minimum width tightly hugs the current bounds of our
    // children.
    std::optional<int> minimum_width = GetMidAnimationTrailingX();
-@@ -902,6 +950,25 @@ gfx::Size TabContainerImpl::GetMinimumSi
+@@ -902,6 +953,21 @@ gfx::Size TabContainerImpl::GetMinimumSi
  
  gfx::Size TabContainerImpl::CalculatePreferredSize(
      const views::SizeBounds& available_size) const {
@@ -141,18 +144,14 @@
 +      tabs_height += child->height();
 +    }
 +
-+    /*if (tabs_height < GetAvailableHeightForTabContainer()) {
-+      max_y = GetAvailableHeightForTabContainer();
-+    }*/
-+
-+    return gfx::Size(available_size.width().value_or(BrowserView::kVerticalTabStripWidth),
-+                     max_y);
++    return gfx::Size(available_size.width().value_or(
++      BrowserView::kVerticalTabStripWidth), max_y);
 +  }
 +
    // During animations, our preferred width tightly hugs the current bounds of
    // our children.
    std::optional<int> preferred_width = GetMidAnimationTrailingX();
-@@ -1216,6 +1283,22 @@ void TabContainerImpl::AnimateScrollToSh
+@@ -1216,6 +1282,22 @@ void TabContainerImpl::AnimateScrollToSh
    tab_scrolling_animation_->Start();
  }
  
@@ -175,7 +174,12 @@
  void TabContainerImpl::AnimateTabSlotViewTo(TabSlotView* tab_slot_view,
                                              const gfx::Rect& target_bounds) {
    // If we don't own the tab, let our controller handle it.
-@@ -1288,14 +1371,22 @@ void TabContainerImpl::StartInsertTabAni
+@@ -1285,23 +1367,42 @@ void TabContainerImpl::StartInsertTabAni
+   gfx::Rect bounds = GetTabAtModelIndex(model_index)->bounds();
+   bounds.set_height(GetLayoutConstant(TAB_STRIP_HEIGHT));
+ 
++  const int kVerticalPadding = GetLayoutConstant(TOP_BAR_VERTICAL_PADDING);
++
    // Adjust the starting bounds of the new tab.
    const int tab_overlap = TabStyle::Get()->GetTabOverlap();
    if (model_index > 0) {
@@ -183,7 +187,10 @@
 -    bounds.set_x(GetTabAtModelIndex(model_index - 1)->bounds().right() -
 -                 tab_overlap);
 +    if (tabs::AreHeliumVerticalTabsEnabled()) {
-+      bounds.set_y(GetTabAtModelIndex(model_index - 1)->bounds().y() + TabStyle::Get()->GetStandardHeight());
++      // If inserting after other tabs, start at the bottom edge of
++      // the previous tab after padding.
++      bounds.set_y(GetTabAtModelIndex(model_index - 1)->bounds().bottom() +
++                   kVerticalPadding);
 +    } else {
 +      // If we have a tab to our left, start at its right edge.
 +      bounds.set_x(GetTabAtModelIndex(model_index - 1)->bounds().right() -
@@ -195,7 +202,9 @@
 -    // Otherwise, if we have a tab to our right, start at its left edge.
 -    bounds.set_x(GetTabAtModelIndex(model_index + 1)->bounds().x());
 +    if (tabs::AreHeliumVerticalTabsEnabled()) {
-+      bounds.set_y(GetTabAtModelIndex(model_index + 1)->bounds().bottom() + TabStyle::Get()->GetStandardHeight());
++      // If inserting before other tabs, start at the top of
++      // the tab strip after padding.
++      bounds.set_y(kVerticalPadding);
 +    } else {
 +      // Otherwise, if we have a tab to our right, start at its left edge.
 +      bounds.set_x(GetTabAtModelIndex(model_index + 1)->bounds().x());
@@ -203,47 +212,71 @@
    }
  
    // Start at the width of the overlap in order to animate at the same speed
-@@ -1315,7 +1406,8 @@ void TabContainerImpl::StartRemoveTabAni
+   // the surrounding tabs are moving, since at this width the subsequent tab
+   // is naturally positioned at the same X coordinate.
+-  bounds.set_width(tab_overlap);
++  if (tabs::AreHeliumVerticalTabsEnabled()) {
++    bounds.set_height(GetLayoutConstant(TAB_HEIGHT));
++  } else {
++    bounds.set_width(tab_overlap);
++  }
+   GetTabAtModelIndex(model_index)->SetBoundsRect(bounds);
+ 
+   // Animate in to the full width.
+@@ -1315,7 +1416,9 @@ void TabContainerImpl::StartRemoveTabAni
    UpdateIdealBounds();
    if (in_tab_close_ && GetTabCount() > 0 &&
        override_available_width_for_tabs_ >
 -          tabs_view_model_.ideal_bounds(GetTabCount() - 1).right()) {
-+      (tabs::AreHeliumVerticalTabsEnabled() ? true : override_available_width_for_tabs_ >
++      (tabs::AreHeliumVerticalTabsEnabled() ||
++        override_available_width_for_tabs_ >
 +          tabs_view_model_.ideal_bounds(GetTabCount() - 1).right())) {
      // Tab closing mode is no longer constraining tab widths - they're at full
      // size. Exit tab closing mode so that it doesn't artificially inflate our
      // bounds.
-@@ -1366,11 +1458,15 @@ gfx::Rect TabContainerImpl::GetTargetBou
+@@ -1365,17 +1468,21 @@ gfx::Rect TabContainerImpl::GetTargetBou
+ 
    // Compute the target bounds for animating this tab closed.  The tab's left
    // edge should stay joined to the right edge of the previous tab, if any.
++  // In vertical mode, the tab's top edge should stay joined to the bottom
++  // edge of the previous tab.
    gfx::Rect target_bounds = tab->bounds();
 -  target_bounds.set_x(
 -      (former_model_index > 0)
 -          ? (tabs_view_model_.ideal_bounds(former_model_index - 1).right() -
 -             tab_overlap)
 -          : 0);
+-
+-  // The tab should animate to the width of the overlap in order to close at the
+-  // same speed the surrounding tabs are moving, since at this width the
+-  // subsequent tab is naturally positioned at the same X coordinate.
+-  target_bounds.set_width(tab_overlap);
 +  if (tabs::AreHeliumVerticalTabsEnabled()) {
 +    target_bounds.set_x(0);
++    target_bounds.set_height(GetLayoutConstant(TAB_HEIGHT));
++    target_bounds.set_width(tab_overlap);
 +  } else {
 +    target_bounds.set_x(
 +       (former_model_index > 0)
 +           ? (tabs_view_model_.ideal_bounds(former_model_index - 1).right() -
 +              tab_overlap)
 +           : 0);
++    target_bounds.set_width(tab_overlap);
 +  }
  
-   // The tab should animate to the width of the overlap in order to close at the
-   // same speed the surrounding tabs are moving, since at this width the
-@@ -1650,7 +1746,7 @@ bool TabContainerImpl::ShouldTabBeVisibl
+   return target_bounds;
+ }
+@@ -1650,7 +1757,8 @@ bool TabContainerImpl::ShouldTabBeVisibl
    // N.B. This is separate from the tab being potentially scrolled offscreen -
    // this solely determines whether the tab should be clipped for the
    // pre-scrolling overflow behavior.
 -  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip)) {
-+  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip) || tabs::AreHeliumVerticalTabsEnabled()) {
++  if (base::FeatureList::IsEnabled(tabs::kScrollableTabStrip) ||
++      tabs::AreHeliumVerticalTabsEnabled()) {
      return true;
    }
  
-@@ -1819,4 +1915,5 @@ bool TabContainerImpl::IsValidModelIndex
+@@ -1819,4 +1927,5 @@ bool TabContainerImpl::IsValidModelIndex
  
  BEGIN_METADATA(TabContainerImpl)
  ADD_READONLY_PROPERTY_METADATA(int, AvailableWidthForTabContainer)
