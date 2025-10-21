@@ -746,3 +746,14 @@
  
    // Scrolls the tabstrip towards the first tab in the tabstrip.
    void ScrollTowardsLeadingTab();
+--- a/chrome/browser/ui/tabs/tab_strip_model.cc
++++ b/chrome/browser/ui/tabs/tab_strip_model.cc
+@@ -1549,6 +1549,8 @@ void TabStripModel::AddTab(std::unique_p
+     if (index < 0 || index > count()) {
+       if (count() >= 1 && profile_->GetPrefs()->GetBoolean(prefs::kNewTabNextToActive)) {
+         index = active_index() + 1;
++      } else if (tabs::AreHeliumVerticalTabsEnabled()) {
++        index = IndexOfFirstNonPinnedTab();
+       } else {
+         index = count();
+       }
