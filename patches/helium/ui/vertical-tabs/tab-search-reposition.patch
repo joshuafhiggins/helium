@@ -1,6 +1,6 @@
 --- a/chrome/browser/ui/views/frame/browser_view.cc
 +++ b/chrome/browser/ui/views/frame/browser_view.cc
-@@ -5182,10 +5182,15 @@ void BrowserView::AddedToWidget() {
+@@ -5191,10 +5191,15 @@ void BrowserView::AddedToWidget() {
  
    if (!base::CommandLine::ForCurrentProcess()->HasSwitch("remove-tabsearch-button"))
    if (GetIsNormalType()) {
