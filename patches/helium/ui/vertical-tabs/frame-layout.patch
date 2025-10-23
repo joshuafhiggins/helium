@@ -161,3 +161,21 @@
  
    explicit BrowserView(std::unique_ptr<Browser> browser);
    BrowserView(const BrowserView&) = delete;
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -4978,6 +4978,15 @@ int BrowserView::NonClientHitTest(const
+     }
+   }
+ 
++  // In vertical tabs mode, check if the point is within the toolbar and
++  // allow the toolbar to handle the event instead of the system frame.
++  if (tabs::AreHeliumVerticalTabsEnabled() && toolbar_) {
++    gfx::Point test_point(point);
++    if (ConvertedHitTest(parent(), toolbar_, &test_point)) {
++      return HTCLIENT;
++    }
++  }
++
+   // Let the frame handle any events that fall within the bounds of the window
+   // controls overlay.
+   if (IsWindowControlsOverlayEnabled() && GetActiveWebContents()) {
